@@ -12,8 +12,8 @@ public class OpenApiConfig {
     public OpenAPI transactionsOpenApi() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("WEX Transactions API")
-                        .description("Corporate Payments transaction processing APIs")
+                        .title("WEX Purchase Transaction API")
+                        .description("Purchase transaction management and currency conversion service")
                         .version("v1"));
     }
 }

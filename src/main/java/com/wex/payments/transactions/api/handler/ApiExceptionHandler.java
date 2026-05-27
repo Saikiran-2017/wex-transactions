@@ -26,8 +26,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
-        FieldError firstFieldError = ex.getBindingResult().getFieldErrors().stream().findFirst().orElse(null);
-        String message = firstFieldError != null ? firstFieldError.getDefaultMessage() : "Invalid request body";
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .filter(msg -> msg != null && !msg.isBlank())
+                .distinct()
+                .reduce((first, second) -> first + "; " + second)
+                .orElse("Invalid request body");
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
     }
 
