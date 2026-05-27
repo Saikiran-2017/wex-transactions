@@ -1,0 +1,2 @@
+-- Flyway baseline migration placeholder.
+-- Schema objects will be added in subsequent steps.
