@@ -2,7 +2,7 @@
 
 ## Overview
 This service stores USD purchase transactions and retrieves converted transaction amounts using U.S. Treasury Reporting Rates of Exchange.
-It is implemented as a production-style Spring Boot microservice with layered architecture, externalized configuration, migrations, and automated test coverage.
+It is implemented as a production-style Spring Boot microservice with layered architecture, externalized configuration, Flyway migrations, and automated test coverage.
 
 ## Tech Stack
 - Java 17
@@ -23,6 +23,11 @@ It is implemented as a production-style Spring Boot microservice with layered ar
 - Automated testing
 - Docker support
 
+## Prerequisites
+- Java 17+
+- Docker Desktop (for containerized run)
+- Maven Wrapper included (`mvnw` / `mvnw.cmd`)
+
 ## API Endpoints
 
 ### POST /transactions
@@ -37,7 +42,7 @@ Example request:
 }
 ```
 
-Example response:
+Example response (`201 Created`):
 ```json
 {
   "id": "b532f5f0-3f57-4604-9eea-73f1f9d70484",
@@ -55,7 +60,7 @@ Example request:
 GET /transactions/b532f5f0-3f57-4604-9eea-73f1f9d70484?currency=Euro Zone-Euro
 ```
 
-Example response:
+Example response (`200 OK`):
 ```json
 {
   "id": "b532f5f0-3f57-4604-9eea-73f1f9d70484",
@@ -68,35 +73,55 @@ Example response:
 }
 ```
 
+### Error response format
+All API errors return:
+```json
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Description is required.",
+  "timestamp": "2026-05-27T21:00:00Z"
+}
+```
+
+Common status codes:
+- `400` validation/input errors
+- `404` transaction not found
+- `422` currency conversion unavailable
+- `503` Treasury API unavailable
+
 ## Running Locally
 
-Using Maven:
+### Option A: Maven + PostgreSQL container
 ```powershell
+docker compose up -d postgres
 .\mvnw.cmd spring-boot:run
 ```
 
-Using Docker:
-```bash
-docker-compose up --build
+### Option B: Full Docker stack (app + postgres)
+```powershell
+docker compose up --build
 ```
 
-## Running Tests
+Application URL: `http://localhost:8080`
 
+## Running Tests
 ```powershell
-.\mvnw.cmd test
+.\mvnw.cmd clean test
 ```
 
 ## Swagger
-[http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- Swagger UI: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- OpenAPI JSON: [http://localhost:8080/api-docs](http://localhost:8080/api-docs)
 
-OpenAPI JSON:
-[http://localhost:8080/api-docs](http://localhost:8080/api-docs)
+## Health
+- Health endpoint: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
 
 ## Architecture Notes
 - Controller, service, and repository layers keep API concerns, business logic, and persistence responsibilities separated.
-- Treasury integration is isolated in a dedicated client (`TreasuryApiClient`) so conversion lookup is decoupled from API and persistence code.
-- Integration tests run with H2 + Flyway in test scope while mocking the external Treasury dependency.
-- Operational and environment-specific values (datasource, treasury endpoint, timeouts) are externalized in configuration.
+- Treasury integration is isolated in `TreasuryApiClient`, decoupling external exchange-rate lookup from API and persistence code.
+- Integration tests use H2 + Flyway test migrations and mock Treasury API calls for fast, repeatable verification.
+- Operational values (datasource, treasury endpoint, timeouts) are externalized in `application.yml`.
 
 ## Assumptions
 - Transaction dates are accepted as provided in the request.

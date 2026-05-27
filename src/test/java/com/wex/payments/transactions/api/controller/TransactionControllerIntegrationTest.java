@@ -221,9 +221,9 @@ class TransactionControllerIntegrationTest {
     @Test
     void getTransactionInCurrencyReturnsBadRequestForInvalidUuid() throws Exception {
         mockMvc.perform(get("/transactions/{id}", "not-a-uuid").param("currency", CURRENCY))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status").value(500))
-                .andExpect(jsonPath("$.message").value("An unexpected error occurred"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Invalid value for request parameter: id"));
     }
 
     @Test
