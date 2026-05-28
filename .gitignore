@@ -37,3 +37,6 @@ logs/
 
 ### Env ###
 .env
+
+### Cursor ###
+.cursor/

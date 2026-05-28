@@ -5,6 +5,7 @@ import com.wex.payments.transactions.api.dto.response.ConvertedTransactionRespon
 import com.wex.payments.transactions.api.dto.response.TransactionResponse;
 import com.wex.payments.transactions.application.service.TransactionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -49,7 +50,9 @@ public class TransactionController {
             description = "Fetches a transaction by id and returns conversion details for the requested currency"
     )
     public ResponseEntity<ConvertedTransactionResponse> getTransactionInCurrency(
+            @Parameter(description = "Stored transaction UUID", required = true)
             @PathVariable UUID id,
+            @Parameter(description = "Treasury country/currency description (e.g. Euro Zone-Euro)", required = true)
             @RequestParam String currency
     ) {
         ConvertedTransactionResponse response = transactionService.getTransactionInCurrency(id, currency);

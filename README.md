@@ -1,8 +1,8 @@
 # WEX Corporate Payments - Purchase Transaction Management System
 
 ## Overview
-This service stores USD purchase transactions and retrieves converted transaction amounts using U.S. Treasury Reporting Rates of Exchange.
-It is implemented as a production-style Spring Boot microservice with layered architecture, externalized configuration, Flyway migrations, and automated test coverage.
+This service stores USD purchase transactions and retrieves converted amounts using U.S. Treasury Reporting Rates of Exchange.
+Built as a Spring Boot microservice with layered architecture, Flyway migrations, externalized configuration, and automated tests.
 
 ## Tech Stack
 - Java 17
@@ -116,6 +116,38 @@ Application URL: `http://localhost:8080`
 
 ## Health
 - Health endpoint: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
+
+## Manual API Verification (PowerShell)
+
+Start the application first (`docker compose up --build` or Maven + Postgres), then run:
+
+```powershell
+# Health check
+Invoke-RestMethod http://localhost:8080/actuator/health
+
+# Create transaction
+$body = @{
+  description = "Office supplies purchase"
+  transactionDate = "2024-10-15"
+  purchaseAmount = 149.99
+} | ConvertTo-Json
+
+$created = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8080/transactions" `
+  -ContentType "application/json" `
+  -Body $body
+
+$created
+
+# Convert transaction
+$id = $created.id
+$currency = [uri]::EscapeDataString("Euro Zone-Euro")
+Invoke-RestMethod "http://localhost:8080/transactions/$id`?currency=$currency"
+
+# Open Swagger UI
+Start-Process "http://localhost:8080/swagger-ui.html"
+```
 
 ## Architecture Notes
 - Controller, service, and repository layers keep API concerns, business logic, and persistence responsibilities separated.
