@@ -1,70 +1,137 @@
-# WEX Corporate Payments - Purchase Transaction Management System
+# WEX Corporate Payments — Purchase Transaction API
 
-## Overview
-This service stores USD purchase transactions and retrieves converted amounts using U.S. Treasury Reporting Rates of Exchange.
-Built as a Spring Boot microservice with layered architecture, Flyway migrations, externalized configuration, and automated tests.
+## Project Overview
+
+API-only Spring Boot service for the WEX Corporate Payments assignment. It stores USD purchase transactions in PostgreSQL and retrieves converted amounts using the [U.S. Treasury Reporting Rates of Exchange API](https://fiscaldata.treasury.gov/api/v1/accounting/od/rates_of_exchange).
+
+## Requirement Coverage
+
+| Requirement | Implementation |
+|---|---|
+| Store purchase transaction (description, date, USD amount) | `POST /transactions` |
+| Assign unique identifier | UUID generated on persist |
+| Description max 50, not blank | Bean Validation + DB constraint |
+| Valid transaction date | ISO `YYYY-MM-DD` parsing + validation |
+| Positive purchase amount, HALF_UP to cents | Service rounding + `@Positive` |
+| Sub-cent input accepted and rounded (e.g. `100.005` → `100.01`) | `TransactionService#createTransaction` |
+| Persist across restarts | PostgreSQL + Flyway |
+| Retrieve transaction in target currency | `GET /transactions/{id}?currency=...` |
+| Treasury rate ≤ transaction date, within 6 months | `TreasuryApiClient` filter + `sort=-record_date` |
+| No eligible rate → 422 | `CurrencyConversionException` |
+| Converted amount HALF_UP to 2 decimals | `TransactionService#getTransactionInCurrency` |
+| Consistent error contract | `ErrorResponse` + `ApiExceptionHandler` |
 
 ## Tech Stack
-- Java 17
-- Spring Boot 3
-- PostgreSQL
-- Flyway
-- WebClient
-- Docker
-- JUnit 5
-- Mockito
-- MockMvc
 
-## Features
-- Store purchase transactions
-- Retrieve converted transactions
-- Treasury API integration
-- Validation and exception handling
-- Automated testing
-- Docker support
+- Java 17
+- Spring Boot 3.2.x
+- Maven (wrapper included)
+- PostgreSQL + Flyway
+- Spring Data JPA
+- Bean Validation
+- WebClient (Treasury API)
+- springdoc OpenAPI / Swagger UI
+- Spring Boot Actuator
+- JUnit 5, Mockito, AssertJ
+- Testcontainers (PostgreSQL integration tests)
+- WireMock (Treasury API tests)
+
+## Architecture
+
+```
+Controller  →  Service  →  Repository  →  PostgreSQL
+                  ↓
+           TreasuryApiClient  →  U.S. Treasury API
+```
+
+- **Controller**: HTTP mapping, validation trigger, status codes only
+- **Service**: Business rules (rounding, conversion, not-found)
+- **Repository**: Persistence
+- **TreasuryApiClient**: External exchange-rate lookup isolated from API/persistence
+
+Base package: `com.wex.payments.transactions`
 
 ## Prerequisites
-- Java 17+
-- Docker Desktop (for containerized run)
-- Maven Wrapper included (`mvnw` / `mvnw.cmd`)
 
-## API Endpoints
+- **Java 17** (required; project targets release 17)
+- Docker Desktop (optional, for PostgreSQL or full stack)
+
+## Setup
+
+### PostgreSQL with Docker
+
+```powershell
+docker compose up -d postgres
+```
+
+Default credentials (local/docker-compose):
+
+- Database: `wex_transactions`
+- User: `wex_user`
+- Password: `wex_password`
+- Port: `5432`
+
+### Compile
+
+```powershell
+.\mvnw.cmd clean compile
+```
+
+### Run tests
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+Integration tests use **WireMock** for the Treasury API. PostgreSQL is started via **Testcontainers** when the Docker Java client is available; otherwise tests fall back to local `docker compose` Postgres on port `5432`, then in-memory H2.
+
+### Run application
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+Or full stack (app + Postgres):
+
+```powershell
+docker compose up --build
+```
+
+Application: `http://localhost:8080`
+
+## API Examples
 
 ### POST /transactions
-Creates and stores a purchase transaction.
 
-Example request:
+```bash
+curl -X POST http://localhost:8080/transactions ^
+  -H "Content-Type: application/json" ^
+  -d "{\"description\":\"Office supplies\",\"transactionDate\":\"2024-10-15\",\"purchaseAmount\":149.99}"
+```
+
+**201 Created**
+
 ```json
 {
-  "description": "Office supplies purchase",
+  "id": "b532f5f0-3f57-4604-9eea-73f1f9d70484",
+  "description": "Office supplies",
   "transactionDate": "2024-10-15",
   "purchaseAmount": 149.99
 }
 ```
 
-Example response (`201 Created`):
+### GET /transactions/{id}?currency=Euro%20Zone-Euro
+
+```bash
+curl "http://localhost:8080/transactions/b532f5f0-3f57-4604-9eea-73f1f9d70484?currency=Euro%%20Zone-Euro"
+```
+
+**200 OK**
+
 ```json
 {
   "id": "b532f5f0-3f57-4604-9eea-73f1f9d70484",
-  "description": "Office supplies purchase",
-  "transactionDate": "2024-10-15",
-  "purchaseAmount": 149.99
-}
-```
-
-### GET /transactions/{id}?currency=Euro Zone-Euro
-Returns a stored transaction converted to the requested currency.
-
-Example request:
-```text
-GET /transactions/b532f5f0-3f57-4604-9eea-73f1f9d70484?currency=Euro Zone-Euro
-```
-
-Example response (`200 OK`):
-```json
-{
-  "id": "b532f5f0-3f57-4604-9eea-73f1f9d70484",
-  "description": "Office supplies purchase",
+  "description": "Office supplies",
   "transactionDate": "2024-10-15",
   "originalAmountUsd": 149.99,
   "exchangeRate": 0.924,
@@ -73,8 +140,18 @@ Example response (`200 OK`):
 }
 ```
 
-### Error response format
+## Swagger & Health
+
+| Resource | URL |
+|---|---|
+| Swagger UI | http://localhost:8080/swagger-ui.html |
+| OpenAPI JSON | http://localhost:8080/api-docs |
+| Health | http://localhost:8080/actuator/health |
+
+## Error Response Format
+
 All API errors return:
+
 ```json
 {
   "status": 400,
@@ -84,78 +161,26 @@ All API errors return:
 }
 ```
 
-Common status codes:
-- `400` validation/input errors
-- `404` transaction not found
-- `422` currency conversion unavailable
-- `503` Treasury API unavailable
+| Condition | HTTP Status |
+|---|---|
+| Validation / malformed JSON / invalid date / missing currency param | 400 |
+| Transaction not found | 404 |
+| No exchange rate / unsupported currency | 422 |
+| Treasury API failure / timeout | 503 |
+| Unexpected server error | 500 |
 
-## Running Locally
+## Testing Strategy
 
-### Option A: Maven + PostgreSQL container
-```powershell
-docker compose up -d postgres
-.\mvnw.cmd spring-boot:run
-```
-
-### Option B: Full Docker stack (app + postgres)
-```powershell
-docker compose up --build
-```
-
-Application URL: `http://localhost:8080`
-
-## Running Tests
-```powershell
-.\mvnw.cmd clean test
-```
-
-## Swagger
-- Swagger UI: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-- OpenAPI JSON: [http://localhost:8080/api-docs](http://localhost:8080/api-docs)
-
-## Health
-- Health endpoint: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
-
-## Manual API Verification (PowerShell)
-
-Start the application first (`docker compose up --build` or Maven + Postgres), then run:
-
-```powershell
-# Health check
-Invoke-RestMethod http://localhost:8080/actuator/health
-
-# Create transaction
-$body = @{
-  description = "Office supplies purchase"
-  transactionDate = "2024-10-15"
-  purchaseAmount = 149.99
-} | ConvertTo-Json
-
-$created = Invoke-RestMethod `
-  -Method Post `
-  -Uri "http://localhost:8080/transactions" `
-  -ContentType "application/json" `
-  -Body $body
-
-$created
-
-# Convert transaction
-$id = $created.id
-$currency = [uri]::EscapeDataString("Euro Zone-Euro")
-Invoke-RestMethod "http://localhost:8080/transactions/$id`?currency=$currency"
-
-# Open Swagger UI
-Start-Process "http://localhost:8080/swagger-ui.html"
-```
-
-## Architecture Notes
-- Controller, service, and repository layers keep API concerns, business logic, and persistence responsibilities separated.
-- Treasury integration is isolated in `TreasuryApiClient`, decoupling external exchange-rate lookup from API and persistence code.
-- Integration tests use H2 + Flyway test migrations and mock Treasury API calls for fast, repeatable verification.
-- Operational values (datasource, treasury endpoint, timeouts) are externalized in `application.yml`.
+| Layer | Class | Approach |
+|---|---|---|
+| Unit | `TransactionServiceTest` | Mockito — create, round, trim, not-found, conversion math |
+| Unit | `TreasuryApiClientTest` | WireMock — query params, 6-month window, empty data, HTTP errors, timeout |
+| Integration | `TransactionControllerIntegrationTest` | Testcontainers PostgreSQL + WireMock + MockMvc — full REST contract |
 
 ## Assumptions
-- Transaction dates are accepted as provided in the request.
-- Treasury API availability is required for conversion responses.
-- Exchange rates are selected from the latest eligible rate at or before transaction date, within a 6-month window.
+
+- Purchase amounts are stored and returned in USD.
+- Treasury `country_currency_desc` values must match Treasury API labels exactly (e.g. `Euro Zone-Euro`).
+- Exchange rate selection uses the most recent eligible rate on or before the transaction date within the prior 6 calendar months.
+- Amounts that round to zero cents (e.g. `0.001`) are rejected with `400` before persistence.
+- Live Treasury API availability is required for manual conversion testing outside WireMock-backed tests.
