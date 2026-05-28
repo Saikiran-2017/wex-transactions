@@ -1,4 +1,4 @@
-# WEX Corporate Payments — Purchase Transaction API
+# WEX Corporate Payments - Purchase Transaction API
 
 ## Project Overview
 
@@ -173,9 +173,9 @@ All API errors return:
 
 | Layer | Class | Approach |
 |---|---|---|
-| Unit | `TransactionServiceTest` | Mockito — create, round, trim, not-found, conversion math |
-| Unit | `TreasuryApiClientTest` | WireMock — query params, 6-month window, empty data, HTTP errors, timeout |
-| Integration | `TransactionControllerIntegrationTest` | Testcontainers PostgreSQL + WireMock + MockMvc — full REST contract |
+| Unit | `TransactionServiceTest` | Mockito: create, round, trim, not-found, conversion math |
+| Unit | `TreasuryApiClientTest` | WireMock: query params, 6-month window, empty data, HTTP errors, timeout |
+| Integration | `TransactionControllerIntegrationTest` | Testcontainers PostgreSQL + WireMock + MockMvc: full REST contract |
 
 ## Assumptions
 
