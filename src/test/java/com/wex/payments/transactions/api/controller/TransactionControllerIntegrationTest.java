@@ -134,6 +134,94 @@ class TransactionControllerIntegrationTest {
     }
 
     @Test
+    void postTransactionsRejectsZeroAmount() throws Exception {
+        mockMvc.perform(post("/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "description", "Office supplies",
+                                "transactionDate", "2024-10-15",
+                                "purchaseAmount", 0
+                        ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(ValidationMessages.PURCHASE_AMOUNT_POSITIVE));
+    }
+
+    @Test
+    void postTransactionsRejectsNullAmount() throws Exception {
+        mockMvc.perform(post("/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "description": "Office supplies",
+                                  "transactionDate": "2024-10-15",
+                                  "purchaseAmount": null
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(ValidationMessages.PURCHASE_AMOUNT_REQUIRED));
+    }
+
+    @Test
+    void postTransactionsRejectsAmountThatRoundsToZero() throws Exception {
+        mockMvc.perform(post("/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "description", "Office supplies",
+                                "transactionDate", "2024-10-15",
+                                "purchaseAmount", 0.001
+                        ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("purchaseAmount must round to a positive cent value"));
+    }
+
+    @Test
+    void postTransactionsRejectsMissingDescription() throws Exception {
+        mockMvc.perform(post("/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "transactionDate": "2024-10-15",
+                                  "purchaseAmount": 149.99
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(ValidationMessages.DESCRIPTION_REQUIRED));
+    }
+
+    @Test
+    void postTransactionsRejectsBlankDescription() throws Exception {
+        mockMvc.perform(post("/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "description", "   ",
+                                "transactionDate", "2024-10-15",
+                                "purchaseAmount", 149.99
+                        ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(ValidationMessages.DESCRIPTION_REQUIRED));
+    }
+
+    @Test
+    void postTransactionsRejectsMissingTransactionDate() throws Exception {
+        mockMvc.perform(post("/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "description": "Office supplies",
+                                  "purchaseAmount": 149.99
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(ValidationMessages.TRANSACTION_DATE_REQUIRED));
+    }
+
+    @Test
     void postTransactionsRejectsInvalidDate() throws Exception {
         mockMvc.perform(post("/transactions")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -157,6 +245,18 @@ class TransactionControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void postTransactionsRejectsMalformedJson() throws Exception {
+        mockMvc.perform(post("/transactions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"Office supplies\""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
     @Test
@@ -234,6 +334,18 @@ class TransactionControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("Required request parameter is missing: currency"));
+    }
+
+    @Test
+    void getTransactionInCurrencyReturnsUnprocessableEntityForBlankCurrency() throws Exception {
+        UUID transactionId = createTransactionViaPost("Office supplies purchase", "2024-10-15", 149.99);
+
+        mockMvc.perform(get("/transactions/{id}", transactionId).param("currency", "   "))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.message").value("Purchase cannot be converted to the target currency:    "));
+
+        verify(treasuryApiClient, never()).getExchangeRate(any(), any());
     }
 
     private UUID createTransactionViaPost(String description, String transactionDate, double purchaseAmount)

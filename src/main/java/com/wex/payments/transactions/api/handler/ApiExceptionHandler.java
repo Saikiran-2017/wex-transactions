@@ -2,6 +2,7 @@ package com.wex.payments.transactions.api.handler;
 
 import com.wex.payments.transactions.api.dto.response.ErrorResponse;
 import com.wex.payments.transactions.domain.exception.CurrencyConversionException;
+import com.wex.payments.transactions.domain.exception.InvalidTransactionException;
 import com.wex.payments.transactions.domain.exception.TransactionNotFoundException;
 import com.wex.payments.transactions.domain.exception.TreasuryApiException;
 import jakarta.validation.ConstraintViolationException;
@@ -67,6 +68,12 @@ public class ApiExceptionHandler {
                 .map(violation -> violation.getMessage())
                 .orElse("Invalid request parameter");
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(InvalidTransactionException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleInvalidTransaction(InvalidTransactionException ex) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(TransactionNotFoundException.class)

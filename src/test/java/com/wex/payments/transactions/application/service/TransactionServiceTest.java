@@ -13,6 +13,7 @@ import com.wex.payments.transactions.api.dto.request.CreateTransactionRequest;
 import com.wex.payments.transactions.api.dto.response.ConvertedTransactionResponse;
 import com.wex.payments.transactions.api.dto.response.TransactionResponse;
 import com.wex.payments.transactions.domain.exception.CurrencyConversionException;
+import com.wex.payments.transactions.domain.exception.InvalidTransactionException;
 import com.wex.payments.transactions.domain.exception.TransactionNotFoundException;
 import com.wex.payments.transactions.domain.exception.TreasuryApiException;
 import com.wex.payments.transactions.domain.model.TreasuryExchangeRate;
@@ -101,6 +102,18 @@ class TransactionServiceTest {
 
         verify(purchaseTransactionRepository).save(entityCaptor.capture());
         assertThat(entityCaptor.getValue().getPurchaseAmount()).isEqualByComparingTo("100.01");
+    }
+
+    @Test
+    void rejectsAmountThatRoundsToZero() {
+        CreateTransactionRequest request = createRequest("Office supplies", "0.001");
+
+        assertThatThrownBy(() -> transactionService.createTransaction(request))
+                .isInstanceOf(InvalidTransactionException.class)
+                .hasMessage("purchaseAmount must round to a positive cent value");
+
+        verify(purchaseTransactionRepository, never()).save(any(PurchaseTransactionEntity.class));
+        verifyNoInteractions(treasuryApiClient);
     }
 
     @Test

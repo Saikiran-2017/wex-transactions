@@ -4,6 +4,7 @@ import com.wex.payments.transactions.api.dto.request.CreateTransactionRequest;
 import com.wex.payments.transactions.api.dto.response.ConvertedTransactionResponse;
 import com.wex.payments.transactions.api.dto.response.TransactionResponse;
 import com.wex.payments.transactions.domain.exception.CurrencyConversionException;
+import com.wex.payments.transactions.domain.exception.InvalidTransactionException;
 import com.wex.payments.transactions.domain.exception.TransactionNotFoundException;
 import com.wex.payments.transactions.domain.model.TreasuryExchangeRate;
 import com.wex.payments.transactions.infrastructure.client.TreasuryApiClient;
@@ -35,10 +36,15 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse createTransaction(CreateTransactionRequest request) {
+        BigDecimal roundedPurchaseAmount = roundMoney(request.getPurchaseAmount());
+        if (roundedPurchaseAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidTransactionException("purchaseAmount must round to a positive cent value");
+        }
+
         PurchaseTransactionEntity entity = PurchaseTransactionEntity.builder()
                 .description(request.getDescription().trim())
                 .transactionDate(request.getTransactionDate())
-                .purchaseAmount(roundMoney(request.getPurchaseAmount()))
+                .purchaseAmount(roundedPurchaseAmount)
                 .build();
 
         PurchaseTransactionEntity saved = purchaseTransactionRepository.save(entity);
